@@ -22,14 +22,9 @@ export async function POST(request) {
       text = buffer.toString('utf-8')
     } else if (fileName.endsWith('.pdf')) {
       const base64 = buffer.toString('base64')
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
       const result = await model.generateContent([
-        {
-          inlineData: {
-            mimeType: 'application/pdf',
-            data: base64,
-          },
-        },
+        { inlineData: { mimeType: 'application/pdf', data: base64 } },
         'Extraia todo o texto deste documento PDF.',
       ])
       text = result.response.text()
@@ -38,18 +33,17 @@ export async function POST(request) {
       const result = await mammoth.extractRawText({ buffer })
       text = result.value
     } else {
-      return NextResponse.json({ error: 'Formato nao suportado. Use PDF, DOCX ou TXT.' }, { status: 400 })
+      return NextResponse.json({ error: 'Formato não suportado. Use PDF, DOCX ou TXT.' }, { status: 400 })
     }
 
     if (!text || text.trim().length < 50) {
-      return NextResponse.json({ error: 'Nao foi possivel extrair texto suficiente do documento.' }, { status: 400 })
+      return NextResponse.json({ error: 'Não foi possível extrair texto suficiente do documento.' }, { status: 400 })
     }
 
     const truncated = text.slice(0, 12000)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-
-    const prompt = `Voce e um analista financeiro e de negocios senior. Analise o documento abaixo e responda SOMENTE em JSON valido, sem markdown, sem blocos de codigo, apenas o JSON puro.
+    const prompt = `Você é um analista financeiro e de negócios sênior. Analise o documento abaixo e responda SOMENTE em JSON válido, sem markdown, sem blocos de código, apenas o JSON puro.
 
 Documento:
 """
@@ -58,10 +52,10 @@ ${truncated}
 
 Responda com este JSON exato:
 {
-  "summary": "Resumo executivo em 3-4 frases claras e objetivas em portugues",
-  "keyPoints": ["ponto critico 1", "ponto critico 2", "ponto critico 3", "ponto critico 4"],
+  "summary": "Resumo executivo em 3-4 frases claras e objetivas em português",
+  "keyPoints": ["ponto crítico 1", "ponto crítico 2", "ponto crítico 3", "ponto crítico 4"],
   "questions": ["pergunta relevante 1", "pergunta relevante 2", "pergunta relevante 3"],
-  "risk": "Baixo ou Medio ou Alto"
+  "risk": "Baixo ou Médio ou Alto"
 }`
 
     const result = await model.generateContent(prompt)
@@ -80,7 +74,7 @@ Responda com este JSON exato:
     const msg = err && err.message ? err.message : String(err)
     console.error('Analyze error:', msg)
     if (msg.includes('API_KEY') || msg.includes('API key') || msg.includes('apiKey')) {
-      return NextResponse.json({ error: 'Chave da API invalida ou nao configurada.' }, { status: 500 })
+      return NextResponse.json({ error: 'Chave da API inválida ou não configurada.' }, { status: 500 })
     }
     if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
       return NextResponse.json({ error: 'Limite da API atingido. Tente novamente mais tarde.' }, { status: 500 })
