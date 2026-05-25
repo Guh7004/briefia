@@ -21,7 +21,6 @@ export async function POST(request) {
     if (fileName.endsWith('.txt')) {
       text = buffer.toString('utf-8')
     } else if (fileName.endsWith('.pdf')) {
-      // For PDF, use base64 and Gemini's vision
       const base64 = buffer.toString('base64')
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
       const result = await model.generateContent([
@@ -39,19 +38,18 @@ export async function POST(request) {
       const result = await mammoth.extractRawText({ buffer })
       text = result.value
     } else {
-      return NextResponse.json({ error: 'Formato não suportado. Use PDF, DOCX ou TXT.' }, { status: 400 })
+      return NextResponse.json({ error: 'Formato nao suportado. Use PDF, DOCX ou TXT.' }, { status: 400 })
     }
 
     if (!text || text.trim().length < 50) {
-      return NextResponse.json({ error: 'Não foi possível extrair texto suficiente do documento.' }, { status: 400 })
+      return NextResponse.json({ error: 'Nao foi possivel extrair texto suficiente do documento.' }, { status: 400 })
     }
 
-    // Limit text to avoid token overflow
     const truncated = text.slice(0, 12000)
 
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
-    const prompt = `Você é um analista financeiro e de negócios sênior. Analise o documento abaixo e responda SOMENTE em JSON válido, sem markdown, sem blocos de código, apenas o JSON puro.
+    const prompt = `Voce e um analista financeiro e de negocios senior. Analise o documento abaixo e responda SOMENTE em JSON valido, sem markdown, sem blocos de codigo, apenas o JSON puro.
 
 Documento:
 """
@@ -60,10 +58,10 @@ ${truncated}
 
 Responda com este JSON exato:
 {
-  "summary": "Resumo executivo em 3-4 frases claras e objetivas em português",
-  "keyPoints": ["ponto crítico 1", "ponto crítico 2", "ponto crítico 3", "ponto crítico 4"],
+  "summary": "Resumo executivo em 3-4 frases claras e objetivas em portugues",
+  "keyPoints": ["ponto critico 1", "ponto critico 2", "ponto critico 3", "ponto critico 4"],
   "questions": ["pergunta relevante 1", "pergunta relevante 2", "pergunta relevante 3"],
-  "risk": "Baixo" | "Médio" | "Alto"
+  "risk": "Baixo ou Medio ou Alto"
 }`
 
     const result = await model.generateContent(prompt)
@@ -71,7 +69,6 @@ Responda com este JSON exato:
 
     let parsed
     try {
-      // Remove markdown code blocks if present
       const clean = raw.replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim()
       parsed = JSON.parse(clean)
     } catch {
@@ -80,7 +77,17 @@ Responda com este JSON exato:
 
     return NextResponse.json(parsed)
   } catch (err) {
-    console.error('Analyze error:', err)
-    return NextResponse.json({ error: 'Erro interno. Tente novamente.' }, { status: 500 })
+    const msg = err && err.message ? err.message : String(err)
+    console.error('Analyze error:', msg)
+    if (msg.includes('API_KEY') || msg.includes('API key') || msg.includes('apiKey')) {
+      return NextResponse.json({ error: 'Chave da API invalida ou nao configurada.' }, { status: 500 })
+    }
+    if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+      return NextResponse.json({ error: 'Limite da API atingido. Tente novamente mais tarde.' }, { status: 500 })
+    }
+    if (msg.includes('PERMISSION_DENIED') || msg.includes('billing')) {
+      return NextResponse.json({ error: 'Acesso negado pela API. Verifique o billing no Google Cloud.' }, { status: 500 })
+    }
+    return NextResponse.json({ error: 'Erro interno: ' + msg }, { status: 500 })
   }
 }
